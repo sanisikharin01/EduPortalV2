@@ -2,7 +2,10 @@
 <html lang="th">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, viewport-fit=cover">
+  <meta name="theme-color" content="#4f46e5">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <title>EduPortal LMS - ระบบจัดการเรียนการสอนออนไลน์สำหรับโรงเรียน</title>
 
   <!-- Google Fonts: Sarabun & Inter -->
@@ -74,6 +77,25 @@
       transform: translateY(-2px);
       box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.08), 0 8px 10px -6px rgba(0, 0, 0, 0.04);
     }
+    button, a, input, select, textarea, label {
+      touch-action: manipulation;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .pb-safe {
+      padding-bottom: max(0.5rem, env(safe-area-inset-bottom, 0.5rem));
+    }
+    @media (max-width: 640px) {
+      input, select, textarea {
+        font-size: 16px !important;
+      }
+      @keyframes slideUpSheet {
+        from { transform: translateY(100%); opacity: 0.5; }
+        to { transform: translateY(0); opacity: 1; }
+      }
+      .bottom-sheet {
+        animation: slideUpSheet 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+      }
+    }
   </style>
 </head>
 <body class="text-slate-800 antialiased selection:bg-indigo-500 selection:text-white">
@@ -112,6 +134,8 @@
         Edit: <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7 M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />,
         Link: <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71 M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />,
         Eye: <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z M12 9a3 3 0 1 0 0 6 3 3 0 0 0 0-6z" />,
+        EyeOff: <g><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24" /><line x1="1" y1="1" x2="23" y2="23" /></g>,
+        User: <g><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" /><circle cx="12" cy="7" r="4" /></g>,
         Check: <polyline points="20 6 9 17 4 12" />,
         X: <path d="M18 6 6 18 M6 6l12 12" />,
         AlertCircle: <g><circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="12" /><line x1="12" y1="16" x2="12.01" y2="16" /></g>,
@@ -364,8 +388,10 @@
 
       const [currentTab, setCurrentTab] = useState('courses');
       const [selectedCourseId, setSelectedCourseId] = useState(null);
+      const [courseTab, setCourseTab] = useState('lessons');
       const [takingExam, setTakingExam] = useState(null);
       const [showAnnouncement, setShowAnnouncement] = useState(false);
+      const [showMobileProfile, setShowMobileProfile] = useState(false);
 
       const currentAnnouncement = useMemo(() => {
         const item = db.Settings?.find(s => s.SettingKey === 'Announcement');
@@ -603,6 +629,9 @@
           <Navbar 
             currentUser={currentUser} 
             currentTab={currentTab} 
+            isSyncing={isSyncing}
+            onRefresh={handlePullData}
+            onOpenProfile={() => setShowMobileProfile(true)}
             setCurrentTab={(tab) => { setSelectedCourseId(null); setCurrentTab(tab); }} 
             onLogout={() => {
               Swal.fire({
@@ -615,6 +644,7 @@
               }).then((result) => {
                 if (result.isConfirmed) {
                   setCurrentUser(null);
+                  setShowMobileProfile(false);
                   sessionStorage.removeItem('eduportal_seen_announcement');
                 }
               });
@@ -626,8 +656,34 @@
             <AnnouncementModal announcement={currentAnnouncement} onClose={() => setShowAnnouncement(false)} />
           )}
 
-          {/* Main Content Workspace */}
-          <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6">
+          {/* Mobile Profile & Quick Actions Sheet */}
+          {showMobileProfile && (
+            <MobileProfileModal
+              currentUser={currentUser}
+              onClose={() => setShowMobileProfile(false)}
+              onShowAnnouncement={() => { setShowMobileProfile(false); setShowAnnouncement(true); }}
+              onRefresh={() => { setShowMobileProfile(false); handlePullData(); }}
+              onLogout={() => {
+                setShowMobileProfile(false);
+                Swal.fire({
+                  title: 'ต้องการออกจากระบบ?',
+                  icon: 'question',
+                  showCancelButton: true,
+                  confirmButtonText: 'ออกจากระบบ',
+                  cancelButtonText: 'ยกเลิก',
+                  confirmButtonColor: '#ef4444'
+                }).then((result) => {
+                  if (result.isConfirmed) {
+                    setCurrentUser(null);
+                    sessionStorage.removeItem('eduportal_seen_announcement');
+                  }
+                });
+              }}
+            />
+          )}
+
+          {/* Main Content Workspace (pb-24 on mobile for fixed bottom nav) */}
+          <main className="flex-1 max-w-7xl w-full mx-auto px-3.5 sm:px-6 lg:px-8 py-4 sm:py-6 pb-24 md:pb-8">
             {selectedCourse ? (
               <CourseDetailView
                 course={selectedCourse}
@@ -635,6 +691,8 @@
                 currentUser={currentUser}
                 gasUrl={gasUrl}
                 callGasApi={callGasApi}
+                courseTab={courseTab}
+                setCourseTab={setCourseTab}
                 onBack={() => setSelectedCourseId(null)}
                 onSaveRecord={saveRecordToSheet}
                 onDeleteRecord={deleteRecordFromSheet}
@@ -647,7 +705,7 @@
                     courses={visibleCourses}
                     teachers={db.Teachers || []}
                     currentUser={currentUser}
-                    onSelectCourse={(c) => setSelectedCourseId(c.CourseID)}
+                    onSelectCourse={(c) => { setCourseTab('lessons'); setSelectedCourseId(c.CourseID); }}
                     onSaveCourse={(c) => saveRecordToSheet('Courses', c)}
                     onDeleteCourse={(id) => deleteRecordFromSheet('Courses', id)}
                   />
@@ -711,36 +769,52 @@
               </div>
             )}
           </main>
+
+          {/* Mobile Fixed Bottom Navigation Bar */}
+          <MobileBottomNav
+            currentUser={currentUser}
+            currentTab={currentTab}
+            setCurrentTab={(tab) => { setSelectedCourseId(null); setCurrentTab(tab); }}
+            selectedCourse={selectedCourse}
+            onBackFromCourse={() => setSelectedCourseId(null)}
+            courseTab={courseTab}
+            setCourseTab={setCourseTab}
+            db={db}
+            onOpenProfile={() => setShowMobileProfile(true)}
+          />
         </div>
       );
     }
 
     // --- Navigation Header Component ---
-    function Navbar({ currentUser, currentTab, setCurrentTab, onLogout }) {
+    function Navbar({ currentUser, currentTab, isSyncing, onRefresh, onOpenProfile, setCurrentTab, onLogout }) {
       const getRoleBadge = (role) => {
-        if (role === 'admin') return <span className="bg-rose-100 text-rose-700 font-semibold px-2.5 py-0.5 rounded-full text-xs">ผู้ดูแลระบบ</span>;
-        if (role === 'teacher') return <span className="bg-amber-100 text-amber-700 font-semibold px-2.5 py-0.5 rounded-full text-xs">ครูผู้สอน</span>;
-        return <span className="bg-emerald-100 text-emerald-700 font-semibold px-2.5 py-0.5 rounded-full text-xs">นักเรียน</span>;
+        if (role === 'admin') return <span className="bg-rose-100 text-rose-700 font-semibold px-2.5 py-0.5 rounded-full text-[11px]">ผู้ดูแลระบบ</span>;
+        if (role === 'teacher') return <span className="bg-amber-100 text-amber-700 font-semibold px-2.5 py-0.5 rounded-full text-[11px]">ครูผู้สอน</span>;
+        return <span className="bg-emerald-100 text-emerald-700 font-semibold px-2.5 py-0.5 rounded-full text-[11px]">นักเรียน</span>;
       };
 
+      const displayName = currentUser.role === 'admin' ? 'ผู้ดูแลระบบ' : (currentUser.user?.Name || 'ผู้ใช้งาน');
+
       return (
-        <header className="bg-white border-b border-slate-200 sticky top-0 z-30 shadow-sm">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div className="flex items-center justify-between h-16">
-              <div className="flex items-center gap-6">
+        <header className="bg-white/95 backdrop-blur-md border-b border-slate-200 sticky top-0 z-30 shadow-sm">
+          <div className="max-w-7xl mx-auto px-3.5 sm:px-6 lg:px-8">
+            <div className="flex items-center justify-between h-14 sm:h-16">
+              <div className="flex items-center gap-4 lg:gap-6">
                 <div 
-                  className="flex items-center gap-3 cursor-pointer group"
+                  className="flex items-center gap-2.5 sm:gap-3 cursor-pointer group"
                   onClick={() => setCurrentTab('courses')}
                 >
-                  <div className="w-10 h-10 bg-indigo-600 rounded-xl flex items-center justify-center text-white shadow-md shadow-indigo-600/20 group-hover:bg-indigo-700 transition">
-                    <Icon name="GraduationCap" size={22} />
+                  <div className="w-9 h-9 sm:w-10 sm:h-10 bg-gradient-to-tr from-indigo-600 to-brand-500 rounded-xl flex items-center justify-center text-white shadow-md shadow-indigo-600/20 group-hover:scale-105 transition">
+                    <Icon name="GraduationCap" size={20} />
                   </div>
                   <div>
-                    <span className="font-extrabold text-lg text-slate-900 tracking-tight block leading-tight">EduPortal</span>
-                    <span className="text-[11px] text-slate-400 font-medium tracking-wide uppercase">School LMS</span>
+                    <span className="font-extrabold text-base sm:text-lg text-slate-900 tracking-tight block leading-tight">EduPortal</span>
+                    <span className="text-[10px] sm:text-[11px] text-slate-400 font-semibold tracking-wide uppercase block">School LMS</span>
                   </div>
                 </div>
 
+                {/* Desktop Top Navigation */}
                 <nav className="hidden md:flex items-center gap-1 pl-4 border-l border-slate-200">
                   <TabButton active={currentTab === 'courses'} onClick={() => setCurrentTab('courses')} icon="BookOpen" label="รายวิชาเรียน" />
                   
@@ -754,12 +828,35 @@
                   )}
 
                   {currentUser.role !== 'admin' && (
-                    <TabButton active={currentTab === 'announcements'} onClick={() => setCurrentTab('announcements')} icon="Bell" label="ประกาศ" />
+                    <TabButton active={currentTab === 'announcements'} onClick={() => setCurrentTab('announcements')} icon="Bell" label="ประกาศโรงเรียน" />
                   )}
                 </nav>
               </div>
 
-              <div className="flex items-center gap-3">
+              {/* Right Side User Info & Quick Actions */}
+              <div className="flex items-center gap-2 sm:gap-3">
+                {/* Quick Sync Button on Mobile & Desktop */}
+                <button
+                  onClick={onRefresh}
+                  disabled={isSyncing}
+                  title="ซิงค์ข้อมูลล่าสุด"
+                  className="p-2 text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 rounded-xl transition border border-slate-200/80 sm:border-transparent active:scale-95"
+                >
+                  <Icon name="RefreshCw" size={18} className={isSyncing ? "animate-spin text-indigo-600" : ""} />
+                </button>
+
+                {/* Mobile User Profile Pill (Tappable to open profile sheet) */}
+                <button
+                  onClick={onOpenProfile}
+                  className="flex sm:hidden items-center gap-2 pl-2.5 pr-2 py-1 bg-slate-100 hover:bg-slate-200/70 rounded-full border border-slate-200/80 active:scale-95 transition"
+                >
+                  <div className="w-6 h-6 rounded-full bg-indigo-600 text-white text-xs font-bold flex items-center justify-center">
+                    {displayName.charAt(0)}
+                  </div>
+                  <span className="text-xs font-bold text-slate-800 max-w-[95px] truncate">{displayName}</span>
+                </button>
+
+                {/* Desktop User Profile Info */}
                 <div className="text-right hidden sm:block">
                   <div className="text-sm font-bold text-slate-800 leading-tight">
                     {currentUser.role === 'admin' ? 'ผู้ดูแลระบบ (Administrator)' : currentUser.user?.Name}
@@ -775,27 +872,11 @@
                 <button
                   onClick={onLogout}
                   title="ออกจากระบบ"
-                  className="p-2.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition border border-transparent hover:border-rose-100"
+                  className="hidden sm:flex p-2.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition border border-transparent hover:border-rose-100"
                 >
                   <Icon name="LogOut" size={20} />
                 </button>
               </div>
-            </div>
-
-            {/* Mobile Navigation bar */}
-            <div className="flex md:hidden overflow-x-auto py-2 gap-1 border-t border-slate-100 custom-scroll">
-              <TabButton active={currentTab === 'courses'} onClick={() => setCurrentTab('courses')} icon="BookOpen" label="รายวิชา" />
-              {currentUser.role === 'admin' && (
-                <>
-                  <TabButton active={currentTab === 'students'} onClick={() => setCurrentTab('students')} icon="Users" label="นักเรียน" />
-                  <TabButton active={currentTab === 'teachers'} onClick={() => setCurrentTab('teachers')} icon="UserCheck" label="ครู" />
-                  <TabButton active={currentTab === 'announcements'} onClick={() => setCurrentTab('announcements')} icon="Bell" label="ประกาศ" />
-                  <TabButton active={currentTab === 'settings'} onClick={() => setCurrentTab('settings')} icon="Settings" label="ตั้งค่า" />
-                </>
-              )}
-              {currentUser.role !== 'admin' && (
-                <TabButton active={currentTab === 'announcements'} onClick={() => setCurrentTab('announcements')} icon="Bell" label="ประกาศ" />
-              )}
             </div>
           </div>
         </header>
@@ -806,7 +887,7 @@
       return (
         <button
           onClick={onClick}
-          className={`flex items-center gap-2 px-3.5 py-2 rounded-xl font-medium text-xs sm:text-sm transition whitespace-nowrap ${
+          className={`flex items-center gap-2 px-3.5 py-2 rounded-xl font-bold text-xs sm:text-sm transition whitespace-nowrap ${
             active ? 'bg-indigo-600 text-white shadow-sm' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
           }`}
         >
@@ -816,25 +897,221 @@
       );
     }
 
+    // --- Mobile Bottom Navigation Bar (Fixed App-like Ergonomic Bar) ---
+    function MobileBottomNav({ currentUser, currentTab, setCurrentTab, selectedCourse, onBackFromCourse, courseTab, setCourseTab, db, onOpenProfile }) {
+      // When inside a course on mobile, show Course Sub-Navigation in the bottom bar for 1-thumb reach!
+      if (selectedCourse) {
+        const lessonCount = (db.Lessons || []).filter(l => l.CourseID === selectedCourse.CourseID && (currentUser.role !== 'student' || String(l.Published) !== 'false')).length;
+        const assignCount = (db.Assignments || []).filter(a => a.CourseID === selectedCourse.CourseID).length;
+        const examCount = (db.Exams || []).filter(e => e.CourseID === selectedCourse.CourseID && (currentUser.role !== 'student' || String(e.Published) !== 'false')).length;
+
+        const courseNavItems = [
+          { id: 'back', label: 'หน้าวิชา', icon: 'ArrowLeft', action: onBackFromCourse },
+          { id: 'lessons', label: 'บทเรียน', icon: 'BookOpen', badge: lessonCount },
+          { id: 'assignments', label: 'การบ้าน', icon: 'FileText', badge: assignCount },
+          { id: 'exams', label: 'ข้อสอบ', icon: 'Clock', badge: examCount },
+          { id: 'evaluations', label: 'ประเมินครู', icon: 'Star' }
+        ];
+
+        return (
+          <nav className="md:hidden fixed bottom-0 inset-x-0 z-40 bg-white/95 backdrop-blur-md border-t border-slate-200 shadow-[0_-4px_20px_rgba(15,23,42,0.06)] pb-safe">
+            <div className="grid grid-cols-5 h-16 px-1">
+              {courseNavItems.map(item => {
+                const isActive = item.id !== 'back' && courseTab === item.id;
+                return (
+                  <button
+                    key={item.id}
+                    onClick={() => item.action ? item.action() : setCourseTab(item.id)}
+                    className={`flex flex-col items-center justify-center gap-1 relative transition active:scale-95 ${
+                      item.id === 'back'
+                        ? 'text-slate-500 hover:text-slate-800'
+                        : isActive
+                          ? 'text-indigo-600 font-extrabold'
+                          : 'text-slate-500 font-medium'
+                    }`}
+                  >
+                    {isActive && (
+                      <span className="absolute top-0 inset-x-3 h-0.5 bg-indigo-600 rounded-b-full"></span>
+                    )}
+                    <div className="relative">
+                      <Icon name={item.icon} size={20} />
+                      {item.badge > 0 && (
+                        <span className={`absolute -top-1.5 -right-2.5 min-w-[16px] h-4 px-1 rounded-full text-[10px] font-bold flex items-center justify-center ${
+                          isActive ? 'bg-indigo-600 text-white' : 'bg-slate-200 text-slate-700'
+                        }`}>
+                          {item.badge}
+                        </span>
+                      )}
+                    </div>
+                    <span className="text-[10px] leading-none tracking-tight">{item.label}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </nav>
+        );
+      }
+
+      // Main Dashboard Bottom Nav
+      const navItems = currentUser.role === 'admin'
+        ? [
+            { id: 'courses', label: 'รายวิชา', icon: 'BookOpen' },
+            { id: 'students', label: 'นักเรียน', icon: 'Users' },
+            { id: 'teachers', label: 'ครูผู้สอน', icon: 'UserCheck' },
+            { id: 'announcements', label: 'ประกาศ', icon: 'Bell' },
+            { id: 'settings', label: 'ตั้งค่า', icon: 'Settings' }
+          ]
+        : [
+            { id: 'courses', label: 'รายวิชาเรียน', icon: 'BookOpen' },
+            { id: 'announcements', label: 'ประกาศโรงเรียน', icon: 'Bell' },
+            { id: 'profile', label: 'บัญชีของฉัน', icon: 'User', action: onOpenProfile }
+          ];
+
+      return (
+        <nav className="md:hidden fixed bottom-0 inset-x-0 z-40 bg-white/95 backdrop-blur-md border-t border-slate-200 shadow-[0_-4px_20px_rgba(15,23,42,0.06)] pb-safe">
+          <div className={`grid ${navItems.length === 5 ? 'grid-cols-5' : 'grid-cols-3'} h-16 px-2`}>
+            {navItems.map(item => {
+              const isActive = item.id !== 'profile' && currentTab === item.id;
+              return (
+                <button
+                  key={item.id}
+                  onClick={() => item.action ? item.action() : setCurrentTab(item.id)}
+                  className={`flex flex-col items-center justify-center gap-1 relative transition active:scale-95 ${
+                    isActive ? 'text-indigo-600 font-extrabold' : 'text-slate-500 font-medium'
+                  }`}
+                >
+                  {isActive && (
+                    <span className="absolute top-0 inset-x-4 h-0.5 bg-indigo-600 rounded-b-full"></span>
+                  )}
+                  <Icon name={item.icon} size={20} />
+                  <span className="text-[11px] leading-none tracking-tight">{item.label}</span>
+                </button>
+              );
+            })}
+          </div>
+        </nav>
+      );
+    }
+
+    // --- Mobile User Profile & Quick Action Sheet ---
+    function MobileProfileModal({ currentUser, onClose, onShowAnnouncement, onRefresh, onLogout }) {
+      const roleLabel = currentUser.role === 'admin' ? 'ผู้ดูแลระบบ (Admin)' : currentUser.role === 'teacher' ? 'ครูผู้สอน (Teacher)' : 'นักเรียน (Student)';
+      const roleColor = currentUser.role === 'admin' ? 'bg-rose-100 text-rose-700' : currentUser.role === 'teacher' ? 'bg-amber-100 text-amber-700' : 'bg-emerald-100 text-emerald-700';
+
+      return (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-slate-900/60 backdrop-blur-sm" onClick={onClose}>
+          <div 
+            className="bg-white w-full sm:max-w-md rounded-t-3xl sm:rounded-3xl p-6 shadow-2xl border-t sm:border border-slate-100 space-y-5 bottom-sheet pb-safe"
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="w-12 h-1.5 bg-slate-200 rounded-full mx-auto sm:hidden"></div>
+
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3.5">
+                <div className="w-14 h-14 rounded-2xl bg-gradient-to-tr from-indigo-600 to-brand-500 text-white font-black text-xl flex items-center justify-center shadow-md shadow-indigo-500/20">
+                  {(currentUser.user?.Name || 'A').charAt(0)}
+                </div>
+                <div>
+                  <h3 className="text-base font-extrabold text-slate-900">
+                    {currentUser.role === 'admin' ? 'ผู้ดูแลระบบกลาง' : currentUser.user?.Name}
+                  </h3>
+                  <div className="flex flex-wrap items-center gap-1.5 mt-1">
+                    <span className={`px-2.5 py-0.5 rounded-full text-[11px] font-bold ${roleColor}`}>
+                      {roleLabel}
+                    </span>
+                    {currentUser.role === 'student' && (
+                      <span className="text-xs font-mono text-slate-500 bg-slate-100 px-2 py-0.5 rounded-md">
+                        รหัส: {currentUser.user?.StudentID}
+                      </span>
+                    )}
+                    {currentUser.role === 'student' && currentUser.user?.Grade && (
+                      <span className="text-xs font-bold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-md">
+                        {currentUser.user?.Grade}
+                      </span>
+                    )}
+                  </div>
+                </div>
+              </div>
+              <button onClick={onClose} className="p-2 text-slate-400 hover:text-slate-600 rounded-xl bg-slate-100">
+                <Icon name="X" size={18} />
+              </button>
+            </div>
+
+            {currentUser.user?.Department && (
+              <div className="px-4 py-2.5 bg-slate-50 rounded-2xl border border-slate-200/80 text-xs text-slate-600">
+                <span className="font-bold text-slate-800">สังกัด: </span>{currentUser.user.Department}
+              </div>
+            )}
+
+            <div className="grid grid-cols-2 gap-2.5 pt-1">
+              <button
+                onClick={onRefresh}
+                className="flex items-center justify-center gap-2 p-3.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold text-xs rounded-2xl border border-indigo-100 transition active:scale-95"
+              >
+                <Icon name="RefreshCw" size={16} />
+                <span>ซิงค์ข้อมูลล่าสุด</span>
+              </button>
+              <button
+                onClick={onShowAnnouncement}
+                className="flex items-center justify-center gap-2 p-3.5 bg-amber-50 hover:bg-amber-100 text-amber-800 font-bold text-xs rounded-2xl border border-amber-100 transition active:scale-95"
+              >
+                <Icon name="Bell" size={16} />
+                <span>ดูป๊อปอัปประกาศ</span>
+              </button>
+            </div>
+
+            <button
+              onClick={onLogout}
+              className="w-full py-3.5 bg-rose-50 hover:bg-rose-100 text-rose-600 font-extrabold text-sm rounded-2xl border border-rose-200/80 flex items-center justify-center gap-2 transition active:scale-95"
+            >
+              <Icon name="LogOut" size={18} />
+              <span>ออกจากระบบ</span>
+            </button>
+          </div>
+        </div>
+      );
+    }
+
     // --- Admin Database Control Bar (Top Bar) ---
     function AdminControlBar({ gasUrl, setGasUrl, isSyncing, onPing, onSetup, onPull, onPush }) {
       const [isOpen, setIsOpen] = useState(false);
+      const [showMobileActions, setShowMobileActions] = useState(false);
       const [localUrl, setLocalUrl] = useState(gasUrl);
 
       const hasUrl = Boolean(gasUrl && gasUrl.startsWith('https://script.google.com/'));
 
       return (
         <div className="bg-slate-900 text-white border-b border-slate-800 text-xs">
-          <div className="max-w-7xl mx-auto px-4 py-2 flex flex-wrap items-center justify-between gap-3">
-            <div className="flex items-center gap-2.5">
-              <span className={`w-2.5 h-2.5 rounded-full ${hasUrl ? 'bg-emerald-400 animate-pulse' : 'bg-amber-400'}`}></span>
-              <span className="font-bold tracking-wide">แผงควบคุมฐานข้อมูล Google Sheets</span>
+          <div className="max-w-7xl mx-auto px-3.5 sm:px-6 py-2 flex flex-wrap items-center justify-between gap-2">
+            <div className="flex items-center gap-2">
+              <span className={`w-2.5 h-2.5 rounded-full shrink-0 ${hasUrl ? 'bg-emerald-400 animate-pulse' : 'bg-amber-400'}`}></span>
+              <span className="font-bold tracking-wide text-[11px] sm:text-xs">ฐานข้อมูล Sheets</span>
               <span className={`px-2 py-0.5 rounded text-[10px] font-mono ${hasUrl ? 'bg-emerald-950 text-emerald-300 border border-emerald-800' : 'bg-amber-950 text-amber-300 border border-amber-800'}`}>
-                {hasUrl ? 'GAS CONNECTED' : 'LOCAL DEMO MODE'}
+                {hasUrl ? 'ONLINE' : 'LOCAL'}
               </span>
             </div>
 
-            <div className="flex items-center gap-2 flex-wrap">
+            {/* Mobile Toggle Button for Admin Actions */}
+            <div className="flex sm:hidden items-center gap-1.5">
+              <button
+                onClick={onPull}
+                disabled={isSyncing}
+                className="px-2.5 py-1 bg-sky-600 text-white font-bold rounded-lg flex items-center gap-1 text-[11px]"
+              >
+                <Icon name="DownloadCloud" size={12} />
+                <span>Pull</span>
+              </button>
+              <button
+                onClick={() => setShowMobileActions(!showMobileActions)}
+                className="px-2.5 py-1 bg-slate-800 text-slate-200 rounded-lg border border-slate-700 flex items-center gap-1 text-[11px]"
+              >
+                <Icon name="Settings" size={12} />
+                <span>{showMobileActions ? 'ซ่อน' : 'เครื่องมือ'}</span>
+              </button>
+            </div>
+
+            {/* Desktop Action Buttons */}
+            <div className="hidden sm:flex items-center gap-2 flex-wrap">
               <button 
                 onClick={() => setIsOpen(!isOpen)} 
                 className="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg border border-slate-700 flex items-center gap-1.5 transition"
@@ -881,8 +1158,50 @@
             </div>
           </div>
 
+          {/* Mobile Expandable Drawer */}
+          {showMobileActions && (
+            <div className="sm:hidden px-3.5 py-3 border-t border-slate-800 bg-slate-950 space-y-2.5">
+              <div className="grid grid-cols-2 gap-2">
+                <button onClick={onPing} disabled={isSyncing} className="p-2 bg-indigo-600 text-white font-bold rounded-xl flex items-center justify-center gap-1.5">
+                  <Icon name="RefreshCw" size={13} className={isSyncing ? "animate-spin" : ""} />
+                  <span>Ping ทดสอบ</span>
+                </button>
+                <button onClick={onSetup} disabled={isSyncing} className="p-2 bg-slate-800 text-amber-300 border border-amber-800/60 font-bold rounded-xl flex items-center justify-center gap-1.5">
+                  <Icon name="Database" size={13} />
+                  <span>สร้าง 10 Sheet</span>
+                </button>
+                <button onClick={onPull} disabled={isSyncing} className="p-2 bg-sky-600 text-white font-bold rounded-xl flex items-center justify-center gap-1.5">
+                  <Icon name="DownloadCloud" size={13} />
+                  <span>ดึงข้อมูล (Pull)</span>
+                </button>
+                <button onClick={onPush} disabled={isSyncing} className="p-2 bg-emerald-600 text-white font-bold rounded-xl flex items-center justify-center gap-1.5">
+                  <Icon name="UploadCloud" size={13} />
+                  <span>ส่งข้อมูล (Push)</span>
+                </button>
+              </div>
+              <div className="flex gap-1.5 pt-1">
+                <input
+                  type="text"
+                  value={localUrl}
+                  onChange={(e) => setLocalUrl(e.target.value)}
+                  placeholder="GAS Web App URL..."
+                  className="flex-1 bg-slate-900 text-slate-100 px-3 py-1.5 rounded-xl border border-slate-700 text-xs font-mono"
+                />
+                <button
+                  onClick={() => {
+                    setGasUrl(localUrl.trim());
+                    Swal.fire({ icon: 'success', title: 'บันทึก URL สำเร็จ', timer: 1200, showConfirmButton: false });
+                  }}
+                  className="px-3 py-1.5 bg-indigo-600 text-white font-bold rounded-xl text-xs shrink-0"
+                >
+                  บันทึก
+                </button>
+              </div>
+            </div>
+          )}
+
           {isOpen && (
-            <div className="max-w-7xl mx-auto px-4 py-3 border-t border-slate-800 bg-slate-950 flex flex-col sm:flex-row gap-2">
+            <div className="hidden sm:flex max-w-7xl mx-auto px-4 py-3 border-t border-slate-800 bg-slate-950 flex-row gap-2">
               <div className="flex-1">
                 <input
                   type="text"
@@ -910,21 +1229,25 @@
     // --- Announcement Popup Modal ---
     function AnnouncementModal({ announcement, onClose }) {
       return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-fade-in">
-          <div className="bg-white rounded-3xl max-w-lg w-full p-6 shadow-2xl border border-slate-100 space-y-4">
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-slate-900/60 backdrop-blur-sm animate-fade-in" onClick={onClose}>
+          <div 
+            className="bg-white rounded-t-3xl sm:rounded-3xl max-w-lg w-full p-6 shadow-2xl border-t sm:border border-slate-100 space-y-4 bottom-sheet pb-safe"
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="w-12 h-1.5 bg-slate-200 rounded-full mx-auto sm:hidden"></div>
             <div className="flex items-center justify-between">
               <span className="px-3 py-1 bg-indigo-50 text-indigo-700 rounded-full text-xs font-bold flex items-center gap-1.5">
                 <Icon name="Bell" size={14} />
                 {announcement.badge || 'ประกาศสำคัญ'}
               </span>
-              <button onClick={onClose} className="text-slate-400 hover:text-slate-600 p-1 rounded-lg">
+              <button onClick={onClose} className="text-slate-400 hover:text-slate-600 p-1.5 rounded-xl bg-slate-100 sm:bg-transparent">
                 <Icon name="X" size={18} />
               </button>
             </div>
 
             <div>
-              <h3 className="text-lg font-bold text-slate-900">{announcement.title}</h3>
-              <p className="text-slate-600 text-sm mt-2 whitespace-pre-line leading-relaxed">
+              <h3 className="text-lg font-extrabold text-slate-900">{announcement.title}</h3>
+              <p className="text-slate-600 text-sm mt-2 whitespace-pre-line leading-relaxed max-h-[55vh] overflow-y-auto custom-scroll">
                 {announcement.content}
               </p>
             </div>
@@ -932,7 +1255,7 @@
             <div className="pt-2 flex justify-end">
               <button
                 onClick={onClose}
-                className="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-xs rounded-xl shadow-md transition"
+                className="w-full sm:w-auto px-6 py-3 sm:py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-sm sm:text-xs rounded-2xl sm:rounded-xl shadow-md transition active:scale-95"
               >
                 รับทราบประกาศ
               </button>
@@ -942,7 +1265,7 @@
       );
     }
 
-    // --- Tabbed Login Form ---
+    // --- Tabbed Login Form (Mobile Friendly with Show/Hide Password & Numeric Keypad) ---
     function LoginForm({ db, onLogin }) {
       const [role, setRole] = useState('student');
       const [studentId, setStudentId] = useState('');
@@ -950,6 +1273,7 @@
       const [teacherEmail, setTeacherEmail] = useState('');
       const [teacherPassword, setTeacherPassword] = useState('');
       const [adminPassword, setAdminPassword] = useState('');
+      const [showPass, setShowPass] = useState(false);
 
       const handleLoginSubmit = (e) => {
         e.preventDefault();
@@ -957,7 +1281,7 @@
         if (role === 'student') {
           const cleanId = studentId.trim();
           const cleanPin = pin.trim();
-          const student = (db.Students || []).find(s => s.StudentID === cleanId || (s.StudentID && s.StudentID.replace(/^0+/, '') === cleanId.replace(/^0+/, '')));
+          const student = (db.Students || []).find(s => isSameStudentId(s.StudentID, cleanId));
 
           if (!student) {
             Swal.fire({
@@ -969,7 +1293,7 @@
             return;
           }
 
-          if (student.PIN && cleanPin !== student.PIN) {
+          if (student.PIN && String(cleanPin) !== String(student.PIN)) {
             Swal.fire({
               icon: 'error',
               title: 'PIN ไม่ถูกต้อง',
@@ -991,7 +1315,7 @@
         if (role === 'teacher') {
           const cleanEmail = teacherEmail.trim().toLowerCase();
           const cleanPass = teacherPassword.trim();
-          const teacher = (db.Teachers || []).find(t => t.Email.toLowerCase() === cleanEmail);
+          const teacher = (db.Teachers || []).find(t => (t.Email || '').toLowerCase() === cleanEmail);
 
           if (!teacher) {
             Swal.fire({
@@ -1003,7 +1327,7 @@
             return;
           }
 
-          if (teacher.Password && teacher.Password !== cleanPass) {
+          if (teacher.Password && String(teacher.Password) !== String(cleanPass)) {
             Swal.fire({
               icon: 'error',
               title: 'รหัสผ่านครูไม่ถูกต้อง',
@@ -1051,35 +1375,38 @@
       };
 
       return (
-        <div className="space-y-6">
+        <div className="space-y-5">
           {/* Role selector tabs */}
-          <div className="grid grid-cols-3 p-1 bg-slate-100 rounded-2xl">
+          <div className="grid grid-cols-3 p-1.5 bg-slate-100 rounded-2xl">
             <button
               type="button"
               onClick={() => setRole('student')}
-              className={`py-2 text-xs font-bold rounded-xl transition ${
+              className={`py-2.5 text-xs font-extrabold rounded-xl transition flex items-center justify-center gap-1.5 ${
                 role === 'student' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-900'
               }`}
             >
-              นักเรียน
+              <Icon name="Users" size={14} />
+              <span>นักเรียน</span>
             </button>
             <button
               type="button"
               onClick={() => setRole('teacher')}
-              className={`py-2 text-xs font-bold rounded-xl transition ${
+              className={`py-2.5 text-xs font-extrabold rounded-xl transition flex items-center justify-center gap-1.5 ${
                 role === 'teacher' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-900'
               }`}
             >
-              ครูผู้สอน
+              <Icon name="UserCheck" size={14} />
+              <span>ครูผู้สอน</span>
             </button>
             <button
               type="button"
               onClick={() => setRole('admin')}
-              className={`py-2 text-xs font-bold rounded-xl transition ${
+              className={`py-2.5 text-xs font-extrabold rounded-xl transition flex items-center justify-center gap-1.5 ${
                 role === 'admin' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-900'
               }`}
             >
-              ผู้ดูแลระบบ
+              <Icon name="Shield" size={14} />
+              <span>แอดมิน</span>
             </button>
           </div>
 
@@ -1090,30 +1417,54 @@
                   <label className="block text-xs font-bold text-slate-700 mb-1.5">รหัสนักเรียน (Student ID)</label>
                   <input
                     type="text"
+                    inputMode="numeric"
                     required
                     value={studentId}
                     onChange={(e) => setStudentId(e.target.value)}
-                    placeholder="เช่น 04501"
-                    className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition font-mono"
+                    placeholder="กรอกรหัสนักเรียน เช่น 04501"
+                    className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-base sm:text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition font-mono"
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1.5">รหัสผ่าน / PIN (4 หลัก)</label>
-                  <input
-                    type="password"
-                    required
-                    maxLength={10}
-                    value={pin}
-                    onChange={(e) => setPin(e.target.value)}
-                    placeholder="PIN เริ่มต้น 1234"
-                    className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition font-mono tracking-widest"
-                  />
+                  <label className="block text-xs font-bold text-slate-700 mb-1.5">รหัสผ่าน / PIN</label>
+                  <div className="relative">
+                    <input
+                      type={showPass ? "text" : "password"}
+                      inputMode="numeric"
+                      required
+                      maxLength={10}
+                      value={pin}
+                      onChange={(e) => setPin(e.target.value)}
+                      placeholder="PIN เริ่มต้น 1234"
+                      className="w-full pl-4 pr-11 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-base sm:text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition font-mono tracking-widest"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPass(!showPass)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 p-1.5 text-slate-400 hover:text-slate-600"
+                    >
+                      <Icon name={showPass ? "EyeOff" : "Eye"} size={18} />
+                    </button>
+                  </div>
                 </div>
-                <div className="flex gap-2 text-[11px] text-slate-500 pt-1">
-                  <span>ทดสอบด่วน:</span>
-                  <button type="button" onClick={() => { setStudentId('04501'); setPin('1234'); }} className="text-indigo-600 underline font-medium">04501 (กิตติพงษ์)</button>
-                  <span>•</span>
-                  <button type="button" onClick={() => { setStudentId('04502'); setPin('1234'); }} className="text-indigo-600 underline font-medium">04502 (ธนพร)</button>
+                <div className="pt-1">
+                  <span className="block text-[11px] font-bold text-slate-400 mb-1.5">แตะเพื่อทดลองเข้าใช้งานด่วน:</span>
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      onClick={() => { setStudentId('04501'); setPin('1234'); }}
+                      className="px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-xl text-xs font-bold border border-indigo-100 transition active:scale-95"
+                    >
+                      ด.ช. กิตติพงษ์ (04501)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => { setStudentId('04502'); setPin('1234'); }}
+                      className="px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-xl text-xs font-bold border border-indigo-100 transition active:scale-95"
+                    >
+                      ด.ญ. ธนพร (04502)
+                    </button>
+                  </div>
                 </div>
               </>
             )}
@@ -1128,23 +1479,47 @@
                     value={teacherEmail}
                     onChange={(e) => setTeacherEmail(e.target.value)}
                     placeholder="เช่น somsak@school.ac.th"
-                    className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition"
+                    className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-base sm:text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition"
                   />
                 </div>
                 <div>
                   <label className="block text-xs font-bold text-slate-700 mb-1.5">รหัสผ่าน (Password)</label>
-                  <input
-                    type="password"
-                    required
-                    value={teacherPassword}
-                    onChange={(e) => setTeacherPassword(e.target.value)}
-                    placeholder="รหัสผ่านเข้าใช้งาน"
-                    className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition"
-                  />
+                  <div className="relative">
+                    <input
+                      type={showPass ? "text" : "password"}
+                      required
+                      value={teacherPassword}
+                      onChange={(e) => setTeacherPassword(e.target.value)}
+                      placeholder="รหัสผ่านเข้าใช้งาน"
+                      className="w-full pl-4 pr-11 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-base sm:text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPass(!showPass)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 p-1.5 text-slate-400 hover:text-slate-600"
+                    >
+                      <Icon name={showPass ? "EyeOff" : "Eye"} size={18} />
+                    </button>
+                  </div>
                 </div>
-                <div className="flex gap-2 text-[11px] text-slate-500 pt-1">
-                  <span>ทดสอบด่วน:</span>
-                  <button type="button" onClick={() => { setTeacherEmail('somsak@school.ac.th'); setTeacherPassword('123'); }} className="text-indigo-600 underline font-medium">ครูสมศักดิ์ (123)</button>
+                <div className="pt-1">
+                  <span className="block text-[11px] font-bold text-slate-400 mb-1.5">แตะเพื่อทดลองเข้าใช้งานด่วน:</span>
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      onClick={() => { setTeacherEmail('somsak@school.ac.th'); setTeacherPassword('123'); }}
+                      className="px-3 py-1.5 bg-amber-50 hover:bg-amber-100 text-amber-800 rounded-xl text-xs font-bold border border-amber-200/60 transition active:scale-95"
+                    >
+                      ครูสมศักดิ์ (วิทย์-คอม)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => { setTeacherEmail('wandee@school.ac.th'); setTeacherPassword('123'); }}
+                      className="px-3 py-1.5 bg-amber-50 hover:bg-amber-100 text-amber-800 rounded-xl text-xs font-bold border border-amber-200/60 transition active:scale-95"
+                    >
+                      ครูวันดี (ภาษาไทย)
+                    </button>
+                  </div>
                 </div>
               </>
             )}
@@ -1153,25 +1528,40 @@
               <>
                 <div>
                   <label className="block text-xs font-bold text-slate-700 mb-1.5">รหัสผ่านผู้ดูแลระบบ (Admin Password)</label>
-                  <input
-                    type="password"
-                    required
-                    value={adminPassword}
-                    onChange={(e) => setAdminPassword(e.target.value)}
-                    placeholder="รหัสผ่าน Admin เริ่มต้น admin1234"
-                    className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition"
-                  />
+                  <div className="relative">
+                    <input
+                      type={showPass ? "text" : "password"}
+                      required
+                      value={adminPassword}
+                      onChange={(e) => setAdminPassword(e.target.value)}
+                      placeholder="รหัสผ่าน Admin เริ่มต้น admin1234"
+                      className="w-full pl-4 pr-11 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-base sm:text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPass(!showPass)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 p-1.5 text-slate-400 hover:text-slate-600"
+                    >
+                      <Icon name={showPass ? "EyeOff" : "Eye"} size={18} />
+                    </button>
+                  </div>
                 </div>
-                <div className="flex gap-2 text-[11px] text-slate-500 pt-1">
-                  <span>ทดสอบด่วน:</span>
-                  <button type="button" onClick={() => { setAdminPassword('admin1234'); }} className="text-indigo-600 underline font-medium">admin1234</button>
+                <div className="pt-1">
+                  <span className="block text-[11px] font-bold text-slate-400 mb-1.5">แตะเพื่อทดลองเข้าใช้งานด่วน:</span>
+                  <button
+                    type="button"
+                    onClick={() => { setAdminPassword('admin1234'); }}
+                    className="px-3 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-700 rounded-xl text-xs font-bold border border-rose-200/60 transition active:scale-95"
+                  >
+                    ผู้ดูแลระบบ (admin1234)
+                  </button>
                 </div>
               </>
             )}
 
             <button
               type="submit"
-              className="w-full py-3 bg-gradient-to-r from-indigo-600 to-brand-600 hover:from-indigo-700 hover:to-brand-700 text-white font-bold text-sm rounded-xl shadow-lg shadow-indigo-600/30 transition transform active:scale-[0.99] mt-2"
+              className="w-full py-3.5 bg-gradient-to-r from-indigo-600 to-brand-600 hover:from-indigo-700 hover:to-brand-700 text-white font-extrabold text-sm rounded-2xl shadow-lg shadow-indigo-600/30 transition transform active:scale-[0.98] mt-2"
             >
               เข้าสู่ระบบ EduPortal
             </button>
@@ -1472,8 +1862,7 @@
     }
 
     // --- Course Detail Workspace Container ---
-    function CourseDetailView({ course, db, currentUser, gasUrl, callGasApi, onBack, onSaveRecord, onDeleteRecord, onStartExam }) {
-      const [courseTab, setCourseTab] = useState('lessons');
+    function CourseDetailView({ course, db, currentUser, gasUrl, callGasApi, courseTab, setCourseTab, onBack, onSaveRecord, onDeleteRecord, onStartExam }) {
 
       const courseLessons = useMemo(() => {
         return (db.Lessons || [])
@@ -1502,81 +1891,81 @@
       }, [db.Evaluations, course.CourseID]);
 
       return (
-        <div className="space-y-6">
+        <div className="space-y-4 sm:space-y-6">
           {/* Top Return & Course Banner */}
-          <div className="space-y-3">
+          <div className="space-y-2.5 sm:space-y-3">
             <button
               onClick={onBack}
-              className="inline-flex items-center gap-2 text-xs font-bold text-slate-500 hover:text-indigo-600 transition"
+              className="inline-flex items-center gap-2 px-3 py-1.5 bg-white hover:bg-slate-100 rounded-xl border border-slate-200 text-xs font-bold text-slate-600 hover:text-indigo-600 shadow-sm transition active:scale-95"
             >
               <Icon name="ArrowLeft" size={16} />
-              <span>กลับสู่หน้ารวมรายวิชา</span>
+              <span>กลับหน้ารวมรายวิชา</span>
             </button>
 
-            <div className={`bg-gradient-to-r ${course.CoverColor || 'from-indigo-600 to-blue-700'} rounded-3xl p-6 sm:p-8 text-white shadow-lg`}>
-              <div className="flex flex-wrap items-center justify-between gap-4">
+            <div className={`bg-gradient-to-r ${course.CoverColor || 'from-indigo-600 to-blue-700'} rounded-3xl p-5 sm:p-8 text-white shadow-lg`}>
+              <div className="flex flex-wrap items-center justify-between gap-3">
                 <div className="space-y-1">
-                  <div className="flex items-center gap-2">
-                    <span className="px-3 py-1 bg-white/20 backdrop-blur-md rounded-lg text-xs font-mono font-bold tracking-wider">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="px-2.5 py-0.5 sm:px-3 sm:py-1 bg-white/20 backdrop-blur-md rounded-lg text-xs font-mono font-bold tracking-wider">
                       {course.Code}
                     </span>
-                    <span className="text-xs bg-black/20 px-2.5 py-1 rounded-md">
+                    <span className="text-[11px] sm:text-xs bg-black/20 px-2.5 py-0.5 sm:py-1 rounded-md">
                       {course.GradeLevel} • ภาคเรียน {course.Term}
                     </span>
                   </div>
-                  <h1 className="text-2xl sm:text-3xl font-black tracking-tight">{course.Name}</h1>
-                  <p className="text-sm text-white/80 flex items-center gap-1.5 pt-1">
-                    <Icon name="UserCheck" size={16} />
+                  <h1 className="text-xl sm:text-3xl font-black tracking-tight leading-snug">{course.Name}</h1>
+                  <p className="text-xs sm:text-sm text-white/85 flex items-center gap-1.5 pt-0.5">
+                    <Icon name="UserCheck" size={15} />
                     <span>ครูผู้สอน: {course.TeacherName}</span>
                   </p>
                 </div>
 
-                <div className="bg-white/10 backdrop-blur-md rounded-2xl p-4 border border-white/15 text-center min-w-[130px]">
+                <div className="hidden sm:block bg-white/10 backdrop-blur-md rounded-2xl p-4 border border-white/15 text-center min-w-[130px]">
                   <span className="text-2xl font-black block">{courseLessons.length}</span>
                   <span className="text-[11px] text-white/80 font-medium">บทเรียนในวิชา</span>
                 </div>
               </div>
 
-              {/* Sub Navigation Bar within Course */}
-              <div className="flex flex-wrap gap-2 pt-6 mt-6 border-t border-white/20">
+              {/* Sub Navigation Bar within Course (Scrollable Pills on Mobile, Full Buttons on Desktop) */}
+              <div className="grid grid-cols-2 sm:flex sm:flex-wrap gap-2 pt-4 mt-4 sm:pt-6 sm:mt-6 border-t border-white/20">
                 <button
                   onClick={() => setCourseTab('lessons')}
-                  className={`px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 ${
-                    courseTab === 'lessons' ? 'bg-white text-indigo-700 shadow-md' : 'text-white/80 hover:bg-white/10'
+                  className={`px-3 py-2.5 sm:px-4 sm:py-2 rounded-xl text-xs font-bold transition flex items-center justify-center sm:justify-start gap-1.5 ${
+                    courseTab === 'lessons' ? 'bg-white text-indigo-700 shadow-md' : 'bg-white/10 text-white hover:bg-white/20'
                   }`}
                 >
-                  <Icon name="BookOpen" size={16} />
-                  <span>บทเรียน & สื่อการสอน ({courseLessons.length})</span>
+                  <Icon name="BookOpen" size={15} />
+                  <span>บทเรียน ({courseLessons.length})</span>
                 </button>
 
                 <button
                   onClick={() => setCourseTab('assignments')}
-                  className={`px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 ${
-                    courseTab === 'assignments' ? 'bg-white text-indigo-700 shadow-md' : 'text-white/80 hover:bg-white/10'
+                  className={`px-3 py-2.5 sm:px-4 sm:py-2 rounded-xl text-xs font-bold transition flex items-center justify-center sm:justify-start gap-1.5 ${
+                    courseTab === 'assignments' ? 'bg-white text-indigo-700 shadow-md' : 'bg-white/10 text-white hover:bg-white/20'
                   }`}
                 >
-                  <Icon name="FileText" size={16} />
-                  <span>การบ้าน & ใบงาน ({courseAssignments.length})</span>
+                  <Icon name="FileText" size={15} />
+                  <span>การบ้าน ({courseAssignments.length})</span>
                 </button>
 
                 <button
                   onClick={() => setCourseTab('exams')}
-                  className={`px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 ${
-                    courseTab === 'exams' ? 'bg-white text-indigo-700 shadow-md' : 'text-white/80 hover:bg-white/10'
+                  className={`px-3 py-2.5 sm:px-4 sm:py-2 rounded-xl text-xs font-bold transition flex items-center justify-center sm:justify-start gap-1.5 ${
+                    courseTab === 'exams' ? 'bg-white text-indigo-700 shadow-md' : 'bg-white/10 text-white hover:bg-white/20'
                   }`}
                 >
-                  <Icon name="Clock" size={16} />
-                  <span>แบบทดสอบออนไลน์ ({courseExams.length})</span>
+                  <Icon name="Clock" size={15} />
+                  <span>ข้อสอบ ({courseExams.length})</span>
                 </button>
 
                 <button
                   onClick={() => setCourseTab('evaluations')}
-                  className={`px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 ${
-                    courseTab === 'evaluations' ? 'bg-white text-indigo-700 shadow-md' : 'text-white/80 hover:bg-white/10'
+                  className={`px-3 py-2.5 sm:px-4 sm:py-2 rounded-xl text-xs font-bold transition flex items-center justify-center sm:justify-start gap-1.5 ${
+                    courseTab === 'evaluations' ? 'bg-white text-indigo-700 shadow-md' : 'bg-white/10 text-white hover:bg-white/20'
                   }`}
                 >
-                  <Icon name="Star" size={16} />
-                  <span>แบบประเมินครูผู้สอน</span>
+                  <Icon name="Star" size={15} />
+                  <span>ประเมินครู</span>
                 </button>
               </div>
             </div>
@@ -3070,37 +3459,37 @@
       return (
         <div className="min-h-screen bg-slate-100 flex flex-col font-sans">
           {/* Exam Header */}
-          <header className="bg-white border-b border-slate-200 sticky top-0 z-30 shadow-sm px-4 py-3">
-            <div className="max-w-4xl mx-auto flex items-center justify-between">
-              <div>
-                <h1 className="text-base font-bold text-slate-900">{exam.Title}</h1>
-                <p className="text-xs text-slate-500">นักเรียน: {student.Name} ({student.StudentID})</p>
+          <header className="bg-white/95 backdrop-blur-md border-b border-slate-200 sticky top-0 z-30 shadow-sm px-3.5 sm:px-6 py-3">
+            <div className="max-w-4xl mx-auto flex items-center justify-between gap-2">
+              <div className="min-w-0">
+                <h1 className="text-sm sm:text-base font-extrabold text-slate-900 truncate">{exam.Title}</h1>
+                <p className="text-[11px] sm:text-xs text-slate-500 truncate">นักเรียน: {student.Name} ({student.StudentID})</p>
               </div>
 
               {/* Timer Display */}
-              <div className={`flex items-center gap-2 px-4 py-2 rounded-2xl font-mono text-base font-bold shadow-sm ${
+              <div className={`flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-1.5 sm:py-2 rounded-2xl font-mono text-sm sm:text-base font-extrabold shadow-sm shrink-0 ${
                 timeLeft < 120 ? 'bg-rose-50 text-rose-600 border border-rose-200 animate-pulse' : 'bg-indigo-50 text-indigo-700 border border-indigo-100'
               }`}>
-                <Icon name="Clock" size={18} />
+                <Icon name="Clock" size={16} />
                 <span>{formatTime(timeLeft)}</span>
               </div>
             </div>
           </header>
 
-          <main className="flex-1 max-w-4xl w-full mx-auto p-4 sm:p-6 space-y-6">
-            {/* Question Quick Jump Pager */}
-            <div className="bg-white rounded-2xl p-4 border border-slate-200 flex flex-wrap gap-2 items-center justify-between">
-              <span className="text-xs font-bold text-slate-600">ข้อสอบทั้งหมด:</span>
-              <div className="flex flex-wrap gap-2">
+          <main className="flex-1 max-w-4xl w-full mx-auto p-3.5 sm:p-6 pb-28 sm:pb-8 space-y-4 sm:space-y-6">
+            {/* Question Quick Jump Pager (Horizontally scrollable on mobile) */}
+            <div className="bg-white rounded-2xl p-3 sm:p-4 border border-slate-200 flex items-center gap-3 overflow-x-auto custom-scroll">
+              <span className="text-xs font-bold text-slate-600 shrink-0">ข้อที่:</span>
+              <div className="flex items-center gap-1.5 sm:flex-wrap">
                 {questions.map((_, idx) => (
                   <button
                     key={idx}
                     onClick={() => setCurrentQuestionIndex(idx)}
-                    className={`w-8 h-8 rounded-xl font-bold text-xs transition ${
+                    className={`w-9 h-9 sm:w-8 sm:h-8 rounded-xl font-extrabold text-xs shrink-0 transition active:scale-95 ${
                       currentQuestionIndex === idx
                         ? 'bg-indigo-600 text-white shadow-md'
                         : answers[idx] !== undefined
-                          ? 'bg-emerald-100 text-emerald-800'
+                          ? 'bg-emerald-100 text-emerald-800 border border-emerald-200'
                           : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
                     }`}
                   >
@@ -3112,49 +3501,50 @@
 
             {/* Active Question Card */}
             {currentQ && (
-              <div className="bg-white rounded-3xl p-6 sm:p-8 border border-slate-200 shadow-sm space-y-6">
-                <div className="flex items-center justify-between border-b border-slate-100 pb-4">
-                  <span className="font-extrabold text-sm text-indigo-600">
+              <div className="bg-white rounded-3xl p-5 sm:p-8 border border-slate-200 shadow-sm space-y-5 sm:space-y-6">
+                <div className="flex items-center justify-between border-b border-slate-100 pb-3.5">
+                  <span className="font-extrabold text-xs sm:text-sm text-indigo-600">
                     คำถามข้อที่ {currentQuestionIndex + 1} จาก {questions.length}
                   </span>
-                  <span className="px-2.5 py-1 bg-slate-100 text-slate-600 rounded-lg text-xs font-bold">
+                  <span className="px-2.5 py-1 bg-slate-100 text-slate-700 rounded-lg text-xs font-bold">
                     {currentQ.score || 5} คะแนน
                   </span>
                 </div>
 
-                <div className="text-base sm:text-lg font-bold text-slate-900 leading-relaxed">
+                <div className="text-base sm:text-lg font-extrabold text-slate-900 leading-relaxed">
                   {currentQ.text}
                 </div>
 
-                <div className="space-y-3 pt-2">
+                <div className="space-y-2.5 sm:space-y-3 pt-1">
                   {currentQ.options.map((opt, optIdx) => {
                     const isSelected = answers[currentQuestionIndex] === optIdx;
                     return (
                       <div
                         key={optIdx}
                         onClick={() => setAnswers({ ...answers, [currentQuestionIndex]: optIdx })}
-                        className={`p-4 rounded-2xl border-2 cursor-pointer transition flex items-center gap-3 ${
+                        className={`p-4 rounded-2xl border-2 cursor-pointer transition flex items-center gap-3.5 active:scale-[0.99] ${
                           isSelected 
-                            ? 'bg-indigo-50/70 border-indigo-600 text-indigo-950 font-bold shadow-sm' 
+                            ? 'bg-indigo-50/80 border-indigo-600 text-indigo-950 font-bold shadow-sm' 
                             : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'
                         }`}
                       >
-                        <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${
+                        <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center shrink-0 ${
                           isSelected ? 'border-indigo-600 bg-indigo-600 text-white' : 'border-slate-300'
                         }`}>
-                          {isSelected && <div className="w-2 h-2 rounded-full bg-white"></div>}
+                          {isSelected && <div className="w-2.5 h-2.5 rounded-full bg-white"></div>}
                         </div>
-                        <span className="text-sm">{opt}</span>
+                        <span className="text-sm sm:text-base leading-snug">{opt}</span>
                       </div>
                     );
                   })}
                 </div>
 
-                <div className="flex items-center justify-between pt-6 border-t border-slate-100">
+                {/* Desktop Navigation Footer */}
+                <div className="hidden sm:flex items-center justify-between pt-6 border-t border-slate-100">
                   <button
                     disabled={currentQuestionIndex === 0}
                     onClick={() => setCurrentQuestionIndex(prev => prev - 1)}
-                    className="px-4 py-2 bg-slate-100 disabled:opacity-40 text-slate-700 rounded-xl text-xs font-bold flex items-center gap-1"
+                    className="px-4 py-2.5 bg-slate-100 disabled:opacity-40 text-slate-700 rounded-xl text-xs font-bold flex items-center gap-1"
                   >
                     <Icon name="ChevronLeft" size={16} />
                     <span>ข้อก่อนหน้า</span>
@@ -3163,7 +3553,7 @@
                   {currentQuestionIndex < questions.length - 1 ? (
                     <button
                       onClick={() => setCurrentQuestionIndex(prev => prev + 1)}
-                      className="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold flex items-center gap-1 shadow"
+                      className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold flex items-center gap-1 shadow"
                     >
                       <span>ข้อถัดไป</span>
                       <Icon name="ChevronRight" size={16} />
@@ -3181,6 +3571,43 @@
               </div>
             )}
           </main>
+
+          {/* Mobile Fixed Bottom Exam Controls */}
+          <div className="sm:hidden fixed bottom-0 inset-x-0 z-40 bg-white/95 backdrop-blur-md border-t border-slate-200 p-3 pb-safe flex items-center justify-between gap-2.5 shadow-[0_-4px_20px_rgba(15,23,42,0.06)]">
+            <button
+              disabled={currentQuestionIndex === 0}
+              onClick={() => setCurrentQuestionIndex(prev => prev - 1)}
+              className="px-4 py-3 bg-slate-100 disabled:opacity-40 text-slate-700 rounded-2xl text-xs font-extrabold flex items-center gap-1 active:scale-95"
+            >
+              <Icon name="ChevronLeft" size={16} />
+              <span>ก่อนหน้า</span>
+            </button>
+
+            <button
+              onClick={handleManualSubmit}
+              className="px-4 py-3 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-2xl text-xs font-extrabold active:scale-95"
+            >
+              ส่งคำตอบ ({Object.keys(answers).length}/{questions.length})
+            </button>
+
+            {currentQuestionIndex < questions.length - 1 ? (
+              <button
+                onClick={() => setCurrentQuestionIndex(prev => prev + 1)}
+                className="flex-1 py-3 bg-indigo-600 text-white rounded-2xl text-xs font-extrabold flex items-center justify-center gap-1 shadow-md active:scale-95"
+              >
+                <span>ข้อถัดไป</span>
+                <Icon name="ChevronRight" size={16} />
+              </button>
+            ) : (
+              <button
+                onClick={handleManualSubmit}
+                className="flex-1 py-3 bg-emerald-600 text-white rounded-2xl text-xs font-extrabold flex items-center justify-center gap-1.5 shadow-md active:scale-95"
+              >
+                <Icon name="CheckCircle" size={16} />
+                <span>ยืนยันส่งข้อสอบ</span>
+              </button>
+            )}
+          </div>
         </div>
       );
     }
@@ -3594,35 +4021,35 @@
       };
 
       return (
-        <div className="space-y-6">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div className="space-y-4 sm:space-y-6">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div>
-              <h1 className="text-2xl font-black text-slate-900 tracking-tight">จัดการข้อมูลนักเรียน (Students)</h1>
+              <h1 className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight">จัดการข้อมูลนักเรียน (Students)</h1>
               <p className="text-xs text-slate-500">จัดการรายชื่อ กำหนด PIN และการเข้าถึงรายวิชา (AllowedCourses)</p>
             </div>
 
-            <div className="flex items-center gap-2">
+            <div className="grid grid-cols-2 sm:flex items-center gap-2">
               <button
                 onClick={() => setShowImportModal(true)}
-                className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl shadow-md transition flex items-center gap-1.5"
+                className="px-3.5 py-2.5 sm:px-4 sm:py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl shadow-md transition flex items-center justify-center gap-1.5 active:scale-95"
               >
                 <Icon name="FileSpreadsheet" size={16} />
-                <span>นำเข้า CSV ขนาดใหญ่ (Chunking)</span>
+                <span>นำเข้า CSV</span>
               </button>
 
               <button
                 onClick={handleOpenAdd}
-                className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-xl shadow-md transition flex items-center gap-1.5"
+                className="px-3.5 py-2.5 sm:px-4 sm:py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-xl shadow-md transition flex items-center justify-center gap-1.5 active:scale-95"
               >
                 <Icon name="Plus" size={16} />
-                <span>เพิ่มนักเรียนรายคน</span>
+                <span>เพิ่มนักเรียน</span>
               </button>
             </div>
           </div>
 
           {/* Search bar */}
           <div className="bg-white rounded-2xl p-3 border border-slate-200 flex items-center gap-3 shadow-sm">
-            <Icon name="Search" size={18} className="text-slate-400" />
+            <Icon name="Search" size={18} className="text-slate-400 shrink-0" />
             <input
               type="text"
               value={searchQuery}
@@ -3632,8 +4059,60 @@
             />
           </div>
 
-          {/* Students Data Table */}
-          <div className="bg-white rounded-3xl border border-slate-200 overflow-hidden shadow-sm">
+          {/* Mobile Card List (Visible only on phones) */}
+          <div className="md:hidden space-y-3">
+            {filteredStudents.length === 0 ? (
+              <div className="bg-white rounded-3xl p-8 text-center text-slate-400 text-xs border border-slate-200">
+                ไม่พบข้อมูลนักเรียนที่ตรงกับเงื่อนไข
+              </div>
+            ) : (
+              filteredStudents.map(student => (
+                <div key={student.StudentID} className="bg-white rounded-2xl p-4 border border-slate-200 shadow-sm space-y-2.5">
+                  <div className="flex items-start justify-between gap-2">
+                    <div>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="font-mono font-extrabold text-xs text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded-lg border border-indigo-100">
+                          #{student.StudentID}
+                        </span>
+                        <span className="px-2 py-0.5 bg-slate-100 rounded-lg text-[11px] text-slate-700 font-bold">
+                          {student.Grade}
+                        </span>
+                        <span className="text-[11px] font-mono text-slate-400">
+                          PIN: {student.PIN || '1234'}
+                        </span>
+                      </div>
+                      <h3 className="font-extrabold text-sm text-slate-900 mt-1.5">{student.Name}</h3>
+                    </div>
+
+                    <div className="flex items-center gap-1 shrink-0">
+                      <button
+                        onClick={() => handleOpenEdit(student)}
+                        className="p-2 bg-slate-100 hover:bg-slate-200 rounded-xl text-slate-600 active:scale-95"
+                        title="แก้ไข"
+                      >
+                        <Icon name="Edit" size={15} />
+                      </button>
+                      <button
+                        onClick={() => handleDelete(student.StudentID)}
+                        className="p-2 bg-rose-50 hover:bg-rose-100 rounded-xl text-rose-600 active:scale-95"
+                        title="ลบ"
+                      >
+                        <Icon name="Trash2" size={15} />
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="pt-2 border-t border-slate-100 flex flex-wrap items-center justify-between gap-2 text-[11px] text-slate-500">
+                    <span className="font-mono truncate max-w-[180px]">วิชา: {student.AllowedCourses || 'ทุกวิชา (*)'}</span>
+                    {student.Email && <span className="font-mono text-slate-400">{student.Email}</span>}
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+
+          {/* Desktop Students Data Table */}
+          <div className="hidden md:block bg-white rounded-3xl border border-slate-200 overflow-hidden shadow-sm">
             <div className="overflow-x-auto custom-scroll">
               <table className="w-full text-left text-xs">
                 <thead className="bg-slate-50 text-slate-600 font-bold border-b border-slate-200">
@@ -3695,8 +4174,8 @@
 
           {/* Modal Add/Edit Student */}
           {showModal && editingStudent && (
-            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm">
-              <div className="bg-white rounded-3xl max-w-lg w-full p-6 shadow-2xl border border-slate-100 space-y-4">
+            <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-slate-900/50 backdrop-blur-sm">
+              <div className="bg-white rounded-t-3xl sm:rounded-3xl max-w-lg w-full p-6 shadow-2xl border-t sm:border border-slate-100 space-y-4 bottom-sheet pb-safe">
                 <div className="flex items-center justify-between border-b border-slate-100 pb-3">
                   <h3 className="text-lg font-bold text-slate-900">
                     {students.some(s => s.StudentID === editingStudent.StudentID) ? 'แก้ไขข้อมูลนักเรียน' : 'เพิ่มนักเรียนรายใหม่'}
@@ -3800,8 +4279,8 @@
 
           {/* Modal CSV Bulk Chunking Import */}
           {showImportModal && (
-            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
-              <div className="bg-white rounded-3xl max-w-2xl w-full p-6 shadow-2xl border border-slate-100 space-y-4 max-h-[90vh] flex flex-col">
+            <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-slate-900/60 backdrop-blur-sm">
+              <div className="bg-white rounded-t-3xl sm:rounded-3xl max-w-2xl w-full p-6 shadow-2xl border-t sm:border border-slate-100 space-y-4 max-h-[90vh] flex flex-col bottom-sheet pb-safe">
                 <div className="flex items-center justify-between border-b border-slate-100 pb-3">
                   <div>
                     <h3 className="text-base font-bold text-slate-900">นำเข้าข้อมูลนักเรียนจำนวนมาก (High-Performance Chunking)</h3>
@@ -3941,23 +4420,60 @@
       };
 
       return (
-        <div className="space-y-6">
-          <div className="flex items-center justify-between">
+        <div className="space-y-4 sm:space-y-6">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div>
-              <h1 className="text-2xl font-black text-slate-900 tracking-tight">จัดการครูผู้สอน (Teachers)</h1>
+              <h1 className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight">จัดการครูผู้สอน (Teachers)</h1>
               <p className="text-xs text-slate-500">จัดการข้อมูลประจำตัว อีเมล รหัสผ่าน และกลุ่มสาระการเรียนรู้</p>
             </div>
 
             <button
               onClick={handleOpenAdd}
-              className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-xl shadow-md transition flex items-center gap-1.5"
+              className="px-4 py-2.5 sm:py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-xl shadow-md transition flex items-center justify-center gap-1.5 active:scale-95"
             >
               <Icon name="Plus" size={16} />
               <span>เพิ่มครูผู้สอนใหม่</span>
             </button>
           </div>
 
-          <div className="bg-white rounded-3xl border border-slate-200 overflow-hidden shadow-sm">
+          {/* Mobile Teachers Card List */}
+          <div className="md:hidden space-y-3">
+            {teachers.map(teacher => (
+              <div key={teacher.TeacherID} className="bg-white rounded-2xl p-4 border border-slate-200 shadow-sm space-y-2.5">
+                <div className="flex items-start justify-between gap-2">
+                  <div>
+                    <span className="font-mono font-extrabold text-xs text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded-lg border border-indigo-100">
+                      #{teacher.TeacherID}
+                    </span>
+                    <h3 className="font-extrabold text-sm text-slate-900 mt-1.5">{teacher.Name}</h3>
+                    <p className="text-xs font-mono text-slate-500 mt-0.5">{teacher.Email}</p>
+                  </div>
+                  <div className="flex items-center gap-1 shrink-0">
+                    <button
+                      onClick={() => handleOpenEdit(teacher)}
+                      className="p-2 bg-slate-100 hover:bg-slate-200 rounded-xl text-slate-600 active:scale-95"
+                      title="แก้ไข"
+                    >
+                      <Icon name="Edit" size={15} />
+                    </button>
+                    <button
+                      onClick={() => handleDelete(teacher.TeacherID)}
+                      className="p-2 bg-rose-50 hover:bg-rose-100 rounded-xl text-rose-600 active:scale-95"
+                      title="ลบ"
+                    >
+                      <Icon name="Trash2" size={15} />
+                    </button>
+                  </div>
+                </div>
+                <div className="pt-2 border-t border-slate-100 text-[11px] text-slate-500">
+                  {teacher.Department}
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* Desktop Teachers Table */}
+          <div className="hidden md:block bg-white rounded-3xl border border-slate-200 overflow-hidden shadow-sm">
             <table className="w-full text-left text-xs">
               <thead className="bg-slate-50 text-slate-600 font-bold border-b border-slate-200">
                 <tr>
@@ -4001,8 +4517,8 @@
 
           {/* Modal Add/Edit Teacher */}
           {showModal && editingTeacher && (
-            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm">
-              <div className="bg-white rounded-3xl max-w-lg w-full p-6 shadow-2xl border border-slate-100 space-y-4">
+            <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-slate-900/50 backdrop-blur-sm">
+              <div className="bg-white rounded-t-3xl sm:rounded-3xl max-w-lg w-full p-6 shadow-2xl border-t sm:border border-slate-100 space-y-4 bottom-sheet pb-safe">
                 <div className="flex items-center justify-between border-b border-slate-100 pb-3">
                   <h3 className="text-lg font-bold text-slate-900">
                     {teachers.some(t => t.TeacherID === editingTeacher.TeacherID) ? 'แก้ไขข้อมูลครู' : 'เพิ่มครูผู้สอนใหม่'}
